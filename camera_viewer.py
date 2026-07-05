@@ -41,10 +41,10 @@ class Button:
         c = self.hover_color if hover else self.color
         cv2.rectangle(img, (self.x, self.y), (self.x + self.w, self.y + self.h), c, -1)
         cv2.rectangle(img, (self.x, self.y), (self.x + self.w, self.y + self.h), (180, 180, 180), 1)
-        text_size = cv2.getTextSize(self.name, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)[0]
+        text_size = cv2.getTextSize(self.name, cv2.FONT_HERSHEY_SIMPLEX, 0.75, 2)[0]
         tx = self.x + (self.w - text_size[0]) // 2
         ty = self.y + (self.h + text_size[1]) // 2
-        cv2.putText(img, self.name, (tx, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
+        cv2.putText(img, self.name, (tx, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
 
 
 class ButtonBar:
@@ -52,15 +52,15 @@ class ButtonBar:
     def __init__(self, width):
         self.buttons = []
         self.hover_idx = -1
-        self.bar_h = 40
+        self.bar_h = 56
         self.bar_bg = (40, 40, 40)
 
     def add(self, name):
-        btn_w = 100
-        gap = 8
+        btn_w = 130
+        gap = 10
         x = gap + len(self.buttons) * (btn_w + gap)
-        y = 4
-        self.buttons.append(Button(name, x, y, btn_w, self.bar_h - 8))
+        y = 8
+        self.buttons.append(Button(name, x, y, btn_w, self.bar_h - 16))
         return self
 
     def check_hover(self, px, py, frame_h):
