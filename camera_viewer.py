@@ -234,6 +234,12 @@ def main():
     mvsdk.CameraSetAeState(hCamera, 0)
     mvsdk.CameraSetExposureTime(hCamera, 30 * 1000)
 
+    # 预设 AE 参数（开 AE 时生效，防闪烁）
+    mvsdk.CameraSetAeTarget(hCamera, 128)                         # 目标亮度 128（中灰）
+    mvsdk.CameraSetAeExposureRange(hCamera, 100, 100 * 1000)      # 曝光范围 0.1ms ~ 100ms
+    mvsdk.CameraSetAeAnalogGainRange(hCamera, 0, 100)             # 增益范围 0~100
+    mvsdk.CameraSetAntiFlick(hCamera, True)                       # 启用抗闪烁
+
     mvsdk.CameraPlay(hCamera)
     print("  采集开始\n")
 
