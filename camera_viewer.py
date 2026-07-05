@@ -69,7 +69,7 @@ class ButtonBar:
             btn.draw(img, hover=(i == self.hover_idx))
 
 
-mouse_state = {"clicked_btn": None, "x": 0, "y": 0}
+mouse_state = {"clicked_btn": None, "x": 0, "y": 0, "wheel": 0}
 
 def mouse_callback(event, x, y, flags, param):
     mouse_state["x"], mouse_state["y"] = x, y
@@ -77,6 +77,8 @@ def mouse_callback(event, x, y, flags, param):
         idx = param.check_hover(x, y)
         if idx >= 0:
             mouse_state["clicked_btn"] = idx
+    elif event == cv2.EVENT_MOUSEWHEEL:
+        mouse_state["wheel"] = 1 if flags > 0 else -1
 
 
 def _gauss_2d(XY, A, x0, sx, y0, sy, B):
@@ -169,8 +171,8 @@ def draw_fit_overlay(display, x0, y0, wx, wy):
                     cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3, cv2.LINE_AA)
 
 
-def draw_loupe(display, mouse_x, mouse_y, raw_frame, h, w):
-    """在右下角画放大镜"""
+def draw_loupe(display, mouse_x, mouse_y, raw_frame, h, w, cmap_on):
+    """在右下角画放大镜，跟随主窗口 cmap"""
     half = LOUPE_SRC // 2
     x1 = max(0, mouse_x - half)
     x2 = min(w, mouse_x + half)
@@ -179,9 +181,9 @@ def draw_loupe(display, mouse_x, mouse_y, raw_frame, h, w):
     crop = raw_frame[y1:y2, x1:x2]
     if crop.size == 0:
         return
-    zoomed = cv2.resize(crop, (LOUPE_SRC * MAG, LOUPE_SRC * MAG),
-                        interpolation=cv2.INTER_NEAREST)
-    zoomed_bgr = cv2.cvtColor(zoomed, cv2.COLOR_GRAY2BGR)
+    sz = int(LOUPE_SRC * MAG)
+    zoomed = cv2.resize(crop, (sz, sz), interpolation=cv2.INTER_NEAREST)
+    zoomed_bgr = cv2.applyColorMap(zoomed, cv2.COLORMAP_JET) if cmap_on else cv2.cvtColor(zoomed, cv2.COLOR_GRAY2BGR)
 
     # 十字准星
     ch = zoomed_bgr.shape[0] // 2
@@ -203,6 +205,7 @@ def draw_loupe(display, mouse_x, mouse_y, raw_frame, h, w):
 
 
 def main():
+    global MAG
     DevList = mvsdk.CameraEnumerateDevice()
     if len(DevList) < 1:
         print("No camera found!")
@@ -317,7 +320,7 @@ def main():
         overexposed = np.any(frame >= 255)
         ae_str = "AE: ON" if ae_state else f"Exp={manual_exposure_us / 1000:.1f}ms Gain={manual_gain}"
         cmap_str = "JET" if cmap_on else "Gray"
-        hud = f"FPS:{fps_display:.1f} | {FrameHead.iWidth}x{FrameHead.iHeight} | {cmap_str} | {ae_str} | BG:{'OK' if bg_frame is not None else '--'} | FIT:{'ON' if fit_state else 'OFF'}"
+        hud = f"FPS:{fps_display:.1f} | {FrameHead.iWidth}x{FrameHead.iHeight} | {cmap_str} | {ae_str} | MAG:{MAG:.1f}x | BG:{'OK' if bg_frame is not None else '--'} | FIT:{'ON' if fit_state else 'OFF'}"
         cv2.putText(display, hud, (15, 140), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3, cv2.LINE_AA)
 
         if overexposed:
@@ -325,8 +328,8 @@ def main():
                         cv2.FONT_HERSHEY_SIMPLEX, 2.0, (0, 0, 255), 5, cv2.LINE_AA)
 
         if input_mode is not None:
-            label = "Exposure(ms)" if input_mode == "exposure" else "Gain(0-300)"
-            prompt = f"{label}: {input_buf}_  [Enter=OK  BS=del  ESC=cancel]"
+            labels = {"exposure": "Exposure(ms)", "gain": "Gain(0-300)", "magnification": "Magnification"}
+            prompt = f"{labels[input_mode]}: {input_buf}_  [Enter=OK  BS=del  ESC=cancel]"
             h, w = display.shape[:2]
             overlay = display.copy()
             cv2.rectangle(overlay, (0, h - 80), (w, h), (35, 35, 35), -1)
@@ -337,7 +340,7 @@ def main():
         if fit_result is not None:
             draw_fit_overlay(display, *fit_result)
 
-        draw_loupe(display, mouse_state["x"], mouse_state["y"], raw, FrameHead.iHeight, FrameHead.iWidth)
+        draw_loupe(display, mouse_state["x"], mouse_state["y"], raw, FrameHead.iHeight, FrameHead.iWidth, cmap_on)
 
         cv2.imshow(win_name, display)
 
@@ -385,13 +388,17 @@ def main():
                         mvsdk.CameraSetExposureTime(hCamera, manual_exposure_us)
                     input_mode = "gain"
                     input_buf = str(manual_gain)
-                else:
+                elif input_mode == "gain":
                     manual_gain = max(0, min(300, int(val)))
                     if not ae_state:
                         mvsdk.CameraSetAnalogGain(hCamera, manual_gain)
+                    input_mode = "magnification"
+                    input_buf = f"{MAG:.1f}"
+                else:
+                    MAG = max(1.0, min(20.0, float(val)))
                     input_mode = None
                     input_buf = ""
-                    print(f"Set: Exp={manual_exposure_us / 1000:.1f}ms Gain={manual_gain}")
+                    print(f"Set: Exp={manual_exposure_us / 1000:.1f}ms Gain={manual_gain} MAG={MAG:.1f}x")
             elif key == 27:
                 input_mode = None
                 input_buf = ""
