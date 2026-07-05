@@ -253,15 +253,21 @@ def main():
     fps_display = 0
     ae_state = False
     manual_exposure_us = 30 * 1000  # 默认 30ms
-    manual_gain = 0                 # 默认增益
-    fit_state = False          # FIT 开关
-    bg_frame = None            # 暗场背景
-    fit_result = None          # 当前拟合结果 (x0, y0, wx, wy, amp, bg)
+    manual_gain = 100               # 默认增益（0-300，黑白相机典型值）
 
     # --- 7. 窗口 + 按钮 ---
     win_name = f"Camera - {dev_info.GetFriendlyName()}"
     cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(win_name, 1280, 960)
+
+    # 手动曝光/增益滑块（仅 AE 关闭时生效）
+    def exp_callback(v):
+        pass  # 在主循环里读取
+    def gain_callback(v):
+        pass
+
+    cv2.createTrackbar("Exposure(ms)", win_name, 30, 200, exp_callback)
+    cv2.createTrackbar("Gain", win_name, 100, 300, gain_callback)
 
     # 创建按钮栏
     btn_bar = ButtonBar(1280)
@@ -269,7 +275,11 @@ def main():
     cv2.setMouseCallback(win_name, mouse_callback, btn_bar)
 
     print(" QUIT=退出 SAVE=保存 AE=自动曝光 BG=捕获背景 FIT=拟合开关")
+    print(" 手动模式下拖动上方滑块调节曝光/增益")
     print("=" * 50)
+
+    prev_exp_tb = 30   # 上次滑块值
+    prev_gain_tb = 100
 
     # --- 8. 主循环 ---
     while True:
@@ -326,17 +336,45 @@ def main():
         # --- 画按钮栏 ---
         btn_bar.draw(display)
 
+        # --- 手动曝光/增益（AE 关闭时响应滑块） ---
+        if not ae_state:
+            exp_tb = cv2.getTrackbarPos("Exposure(ms)", win_name)
+            gain_tb = cv2.getTrackbarPos("Gain", win_name)
+            exp_tb = max(1, exp_tb)
+            if exp_tb != prev_exp_tb or gain_tb != prev_gain_tb:
+                prev_exp_tb = exp_tb
+                prev_gain_tb = gain_tb
+                manual_exposure_us = exp_tb * 1000
+                manual_gain = gain_tb
+                mvsdk.CameraSetExposureTime(hCamera, manual_exposure_us)
+                mvsdk.CameraSetAnalogGain(hCamera, manual_gain)
+
+        # --- 过曝检测 ---
+        raw = frame.squeeze()
+        overexposed = np.any(raw >= 255)
+
         # --- HUD 信息（按钮下方） ---
+        exp_tb = cv2.getTrackbarPos("Exposure(ms)", win_name)
+        gain_tb = cv2.getTrackbarPos("Gain", win_name)
+        if ae_state:
+            ae_str = "AE: ON"
+        else:
+            ae_str = f"Exp={exp_tb}ms Gain={gain_tb}"
+
         status_parts = [
             f"FPS: {fps_display:.1f}",
             f"{FrameHead.iWidth}x{FrameHead.iHeight}",
             "MONO8" if mono else "BGR8",
-            f"AE: {'ON' if ae_state else 'OFF'}",
+            ae_str,
             f"BG: {'OK' if bg_frame is not None else '--'}",
             f"FIT: {'ON' if fit_state else 'OFF'}",
         ]
         cv2.putText(display, " | ".join(status_parts),
                     (10, 76), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2, cv2.LINE_AA)
+
+        if overexposed:
+            cv2.putText(display, "! OVEREXPOSED !",
+                        (10, 115), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3, cv2.LINE_AA)
 
         # --- 画拟合叠加 ---
         if fit_result is not None:
