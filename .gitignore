@@ -1,8 +1,7 @@
 # MindVision SDK installation (download separately)
 MindVision/
 
-# SDK DLLs (copy from MindVision SDK after installation)
-bin/
+# (DLLs included in repo for convenience)
 
 # Python
 __pycache__/
