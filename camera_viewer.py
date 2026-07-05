@@ -111,11 +111,10 @@ def gaussian_2d_moments(img, roi_size=256):
     if var_x <= 0 or var_y <= 0:
         return None
 
-    return (x1 + x0_loc, y1 + y0_loc, 2.0 * np.sqrt(var_x), 2.0 * np.sqrt(var_y),
-            roi_sub.max(), bg)
+    return x1 + x0_loc, y1 + y0_loc, 2.0 * np.sqrt(var_x), 2.0 * np.sqrt(var_y)
 
 
-def draw_fit_overlay(display, x0, y0, wx, wy, amp, bg):
+def draw_fit_overlay(display, x0, y0, wx, wy):
     xc, yc = int(round(x0)), int(round(y0))
     h, w = display.shape[:2]
     cross = max(int(wx * 1.2), 30)
@@ -131,7 +130,6 @@ def draw_fit_overlay(display, x0, y0, wx, wy, amp, bg):
         f"Center: ({x0:.1f}, {y0:.1f}) px",
         f"Waist wx={wx_um:.1f} um  wy={wy_um:.1f} um",
         f"MFD = {mfd:.3f}",
-        f"Amp={amp:.0f}  BG={bg:.0f}",
     ]
     for i, line in enumerate(lines):
         cv2.putText(display, line, (15, 220 + i * 48),
