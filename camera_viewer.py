@@ -146,18 +146,24 @@ def gaussian_fit(img):
     _, x0, sx, y0, sy, _ = popt
     if sx <= 0 or sy <= 0:
         return None
-    return x0, y0, 4.0 * sx, 4.0 * sy
+
+    y_pred = _gauss_2d(xdata, *popt)
+    ss_res = np.sum((ydata - y_pred) ** 2)
+    ss_tot = np.sum((ydata - ydata.mean()) ** 2)
+    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    return x0, y0, 4.0 * sx, 4.0 * sy, r2
 
 
-def draw_fit_overlay(display, x0, y0, wx, wy):
+def draw_fit_overlay(display, x0, y0, wx, wy, r2, cmap_on):
+    color = (255, 0, 255) if cmap_on else (0, 255, 0)  # magenta / green
     xc, yc = int(round(x0)), int(round(y0))
     h, w = display.shape[:2]
     cross = max(int(wx * 1.2), 30)
 
-    cv2.line(display, (max(0, xc - cross), yc), (min(w - 1, xc + cross), yc), (0, 255, 0), 2)
-    cv2.line(display, (xc, max(0, yc - cross)), (xc, min(h - 1, yc + cross)), (0, 255, 0), 2)
+    cv2.line(display, (max(0, xc - cross), yc), (min(w - 1, xc + cross), yc), color, 2)
+    cv2.line(display, (xc, max(0, yc - cross)), (xc, min(h - 1, yc + cross)), color, 2)
     if wx > 0 and wy > 0:
-        cv2.ellipse(display, (xc, yc), (int(wx), int(wy)), 0, 0, 360, (0, 255, 0), 2)
+        cv2.ellipse(display, (xc, yc), (int(wx), int(wy)), 0, 0, 360, color, 2)
 
     wx_um, wy_um = wx * 3.2, wy * 3.2
     mfd = (wx_um + wy_um) / 2 / 62.5
@@ -165,10 +171,11 @@ def draw_fit_overlay(display, x0, y0, wx, wy):
         f"Center: ({x0:.1f}, {y0:.1f}) px",
         f"Waist wx={wx_um:.1f} um  wy={wy_um:.1f} um",
         f"MFD = {mfd:.3f}",
+        f"R^2 = {r2:.4f}",
     ]
     for i, line in enumerate(lines):
         cv2.putText(display, line, (15, 220 + i * 48),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3, cv2.LINE_AA)
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.2, color, 3, cv2.LINE_AA)
 
 
 def draw_loupe(display, mouse_x, mouse_y, raw_frame, h, w, cmap_on):
@@ -338,7 +345,7 @@ def main():
                         cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 255), 3, cv2.LINE_AA)
 
         if fit_result is not None:
-            draw_fit_overlay(display, *fit_result)
+            draw_fit_overlay(display, *fit_result, cmap_on)
 
         draw_loupe(display, mouse_state["x"], mouse_state["y"], raw, FrameHead.iHeight, FrameHead.iWidth, cmap_on)
 
