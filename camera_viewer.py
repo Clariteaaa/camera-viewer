@@ -188,8 +188,8 @@ def draw_fit_overlay(display, x0, y0, wx, wy, amp, bg):
         f"Amplitude: {amp:.0f} | BG: {bg:.0f}",
     ]
     for i, line in enumerate(lines):
-        cv2.putText(display, line, (10, 115 + i * 22),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+        cv2.putText(display, line, (10, 130 + i * 28),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2, cv2.LINE_AA)
 
 
 # ============================================================
@@ -328,7 +328,7 @@ def main():
             f"FIT: {'ON' if fit_state else 'OFF'}",
         ]
         cv2.putText(display, " | ".join(status_parts),
-                    (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+                    (10, 76), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2, cv2.LINE_AA)
 
         # --- 画拟合叠加 ---
         if fit_result is not None:
