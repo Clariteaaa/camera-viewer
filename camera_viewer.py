@@ -73,7 +73,9 @@ mouse_state = {"clicked_btn": None}
 
 def mouse_callback(event, x, y, flags, param):
     if event == cv2.EVENT_LBUTTONDOWN:
-        mouse_state["clicked_btn"] = param.check_hover(x, y)
+        idx = param.check_hover(x, y)
+        if idx >= 0:
+            mouse_state["clicked_btn"] = idx
 
 # ============================================================
 # 二维高斯拟合（矩方法）
