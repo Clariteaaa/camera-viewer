@@ -125,9 +125,12 @@ def draw_fit_overlay(display, x0, y0, wx, wy, amp, bg):
     if wx > 0 and wy > 0:
         cv2.ellipse(display, (xc, yc), (int(wx), int(wy)), 0, 0, 360, (0, 255, 0), 2)
 
+    wx_um, wy_um = wx * 3.2, wy * 3.2
+    mfd = (wx_um + wy_um) / 2 / 62.5
     lines = [
-        f"Center: ({x0:.1f}, {y0:.1f})",
-        f"Waist wx={wx:.1f}  wy={wy:.1f} px",
+        f"Center: ({x0:.1f}, {y0:.1f}) px",
+        f"Waist wx={wx_um:.1f} um  wy={wy_um:.1f} um",
+        f"MFD = {mfd:.3f}",
         f"Amp={amp:.0f}  BG={bg:.0f}",
     ]
     for i, line in enumerate(lines):
