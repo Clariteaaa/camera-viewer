@@ -1,76 +1,70 @@
 # Camera Viewer
 
-迈德威视 MV-SUA 系列工业相机 Python 驱动 — 实时预览 + 二维高斯拟合。
+迈德威视 MindVision MV-SUA 系列工业相机 Python 驱动。实时预览、二维高斯拟合、激光光斑束腰测量。
 
 ## 快速开始
 
 ```bash
 git clone https://github.com/Clariteaaa/camera-viewer.git
 cd camera-viewer
-pip install opencv-python numpy
+pip install -r requirements.txt
 python camera_viewer.py
 ```
 
-DLL 已内置在 `bin/`，无需额外下载 SDK。
+DLL 已内置，无需额外下载 SDK。
 
-## 功能
+## 界面
 
-- **实时预览** — 2592×2048 黑白/彩色自动识别
-- **图形按钮** — 鼠标点击画面顶部按钮控制，无需键盘焦点
-- **自动曝光** — 一键切换手动/自动曝光
-- **二维高斯拟合** — 矩方法实时计算激光光斑中心与束腰
+画面顶部大按钮，鼠标点击操作：
 
-## 操作
+| 按钮 | 功能 |
+|------|------|
+| **QUIT** | 退出 |
+| **SAVE** | 保存当前帧为 PNG |
+| **AE** | 自动曝光 开/关 |
+| **BG** | 捕获暗场背景 |
+| **FIT** | 高斯拟合 开/关 |
+| **SET** | 手动输入曝光和增益 |
+| **CMAP** | JET 彩色 / 灰度切换 |
 
-| 按钮 | 键盘 | 功能 |
-|------|------|------|
-| **QUIT** | `q` | 退出程序 |
-| **SAVE** | `s` | 保存当前帧为 PNG |
-| **AE** | `a` | 自动曝光 开/关 |
-| **BG** | `b` | 捕获当前帧作为暗场背景 |
-| **FIT** | `f` | 高斯拟合 开/关 |
+## 手动曝光设置
 
-## 高斯拟合使用方法
+点击 **SET** → 画面底部出现输入栏 → 键盘输入数字 → **Enter** 确认：
 
-1. 挡住激光（或关闭），点击 **BG** 捕获暗场背景
+1. 输入曝光时间（ms）→ Enter
+2. 输入增益（0-300）→ Enter → 生效
+
+ESC 取消，Backspace 删除。视频不中断。
+
+## 高斯拟合
+
+矩方法（Method of Moments），每帧微秒级完成。
+
+1. 挡住激光，点击 **BG** 捕获暗场背景
 2. 打开激光，点击 **FIT** 开启拟合
-3. 画面叠加显示：
-   - 🟢 十字线 — 光斑中心坐标
-   - 🟢 椭圆 — 束腰轮廓（1/e² 强度半径，w = 2σ）
-   - 🟢 文字 — 中心 (x₀, y₀)、束腰 (wₓ, wᵧ)、振幅、背景值
+3. 画面叠加：
+   - 🟢 十字线 → 光斑中心
+   - 🟢 椭圆 → 束腰轮廓（w = 2σ, 1/e² 半径）
+   - 🟢 文字 → 中心坐标(px)、束腰(μm)、模场直径 MFD
 
-## 拟合原理
-
-矩方法（Method of Moments），在光斑周围 256×256 ROI 上计算：
+## 拟合显示
 
 ```
-总强度    I_total = Σ I(x,y)
-中心      x₀ = Σ x·I / I_total,  y₀ = Σ y·I / I_total
-方差      σx² = Σ (x-x₀)²·I / I_total
-束腰      w = 2σ
+Center: (1296.0, 1024.0) px
+Waist wx=160.0 um  wy=150.0 um
+MFD = 2.480
 ```
 
-O(N) 复杂度，每帧微秒级完成，不影响实时帧率。
+- 束腰从像素换算为 μm（3.2 μm/px）
+- MFD = (wx_μm + wy_μm) / 2 / 62.5
+- 过曝时显示红色 **OVEREXPOSED** 警告
 
-## 目录结构
+## 目录
 
 ```
 camera-viewer/
   camera_viewer.py    # 主程序
-  mvsdk.py            # 迈德威视 SDK Python 绑定
-  bin/                # SDK DLL（64位）
+  mvsdk.py            # 迈德威视 SDK 绑定
+  bin/                # SDK DLL (x64)
   requirements.txt
-  README.md
 ```
-
-## 依赖
-
-- Python ≥ 3.8
-- opencv-python
-- numpy
-- Windows 10/11（迈德威视 SDK 官方支持）
-
-## 致谢
-
-- 迈德威视 MVCAMSDK
-- 官方 Python 示例 `mvsdk.py`
