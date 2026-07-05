@@ -16,10 +16,6 @@ import platform
 import time
 from collections import deque
 
-# ============================================================
-# 按钮系统
-# ============================================================
-
 class Button:
     def __init__(self, name, x, y, w, h, color=(60, 60, 60), hover_color=(120, 120, 120)):
         self.name = name
@@ -77,10 +73,6 @@ def mouse_callback(event, x, y, flags, param):
         if idx >= 0:
             mouse_state["clicked_btn"] = idx
 
-# ============================================================
-# 二维高斯拟合（矩方法）
-# ============================================================
-
 def gaussian_2d_moments(img, roi_size=256):
     h, w = img.shape
     max_val = img.max()
@@ -135,10 +127,6 @@ def draw_fit_overlay(display, x0, y0, wx, wy):
         cv2.putText(display, line, (15, 220 + i * 48),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3, cv2.LINE_AA)
 
-# ============================================================
-# 主程序
-# ============================================================
-
 def main():
     DevList = mvsdk.CameraEnumerateDevice()
     if len(DevList) < 1:
@@ -181,7 +169,7 @@ def main():
     ae_state = False
     manual_exposure_us = 30_000
     manual_gain = 100
-    cmap_on = True          # 默认彩色映射
+    cmap_on = True
     fit_state = False
     bg_frame = None
     fit_result = None
@@ -205,9 +193,6 @@ def main():
             mvsdk.CameraSetExposureTime(hCamera, manual_exposure_us)
             mvsdk.CameraSetAnalogGain(hCamera, manual_gain)
         print(f"AE: {'ON' if ae_state else 'OFF'}")
-
-    print("QUIT  SAVE  AE  BG  FIT  SET")
-    print("=" * 50)
 
     while True:
         try:
@@ -242,7 +227,6 @@ def main():
         else:
             display = frame
 
-        # 拟合
         if fit_state:
             src = frame.squeeze().astype(np.float32)
             if bg_frame is not None:
@@ -254,7 +238,6 @@ def main():
 
         btn_bar.draw(display)
 
-        # HUD
         overexposed = np.any(frame >= 255)
         ae_str = "AE: ON" if ae_state else f"Exp={manual_exposure_us // 1000}ms Gain={manual_gain}"
         cmap_str = "JET" if cmap_on else "Gray"
