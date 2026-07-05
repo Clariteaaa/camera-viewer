@@ -307,7 +307,7 @@ def main():
                 input_mode = "exposure"
                 input_buf = str(manual_exposure_us // 1000)
 
-        # 键盘
+        # 键盘（仅 SET 输入模式）
         key = cv2.waitKey(1) & 0xFF
 
         if input_mode is not None:
@@ -336,24 +336,6 @@ def main():
             elif key == 27:
                 input_mode = None
                 input_buf = ""
-        else:
-            if key == ord('q'):
-                break
-            elif key == ord('s'):
-                fname = f"capture_{time.strftime('%Y%m%d_%H%M%S')}.png"
-                cv2.imwrite(fname, frame.squeeze())
-                print(f"Saved: {fname}")
-            elif key == ord('a'):
-                toggle_ae()
-            elif key == ord('b'):
-                bg_frame = frame.squeeze().astype(np.float32)
-                print(f"BG captured (mean={bg_frame.mean():.1f})")
-            elif key == ord('f'):
-                fit_state = not fit_state
-                print(f"FIT: {'ON' if fit_state else 'OFF'}")
-            elif key == ord('c'):
-                cmap_on = not cmap_on
-                print(f"Colormap: {'JET' if cmap_on else 'Gray'}")
 
     mvsdk.CameraUnInit(hCamera)
     mvsdk.CameraAlignFree(pFrameBuffer)
