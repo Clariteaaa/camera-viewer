@@ -18,7 +18,7 @@ from collections import deque
 from scipy.optimize import curve_fit
 
 MAG = 3         # 放大镜倍数
-LOUPE_SRC = 50   # 放大镜原始裁切尺寸
+LOUPE_SRC = 100  # 放大镜原始裁切尺寸
 
 class Button:
     def __init__(self, name, x, y, w, h, color=(60, 60, 60), hover_color=(120, 120, 120)):
@@ -237,7 +237,7 @@ def main():
         mvsdk.CAMERA_MEDIA_TYPE_MONO8 if mono else mvsdk.CAMERA_MEDIA_TYPE_BGR8)
     mvsdk.CameraSetTriggerMode(hCamera, 0)
     mvsdk.CameraSetAeState(hCamera, 0)
-    mvsdk.CameraSetExposureTime(hCamera, 30 * 1000)
+    mvsdk.CameraSetExposureTime(hCamera, 0.5 * 1000)
     mvsdk.CameraSetAeTarget(hCamera, 128)
     mvsdk.CameraSetAeExposureRange(hCamera, 100, 100 * 1000)
     mvsdk.CameraSetAeAnalogGainRange(hCamera, 0, 100)
@@ -252,7 +252,7 @@ def main():
     t_last = t_fps_update = time.perf_counter()
     fps_display = 0
     ae_state = False
-    manual_exposure_us = 30_000
+    manual_exposure_us = 500
     manual_gain = 100
     cmap_on = True
     fit_state = False
@@ -327,8 +327,9 @@ def main():
         overexposed = np.any(frame >= 255)
         ae_str = "AE: ON" if ae_state else f"Exp={manual_exposure_us / 1000:.1f}ms Gain={manual_gain}"
         cmap_str = "JET" if cmap_on else "Gray"
+        hud_color = (255, 0, 255) if cmap_on else (0, 255, 0)
         hud = f"FPS:{fps_display:.1f} | {FrameHead.iWidth}x{FrameHead.iHeight} | {cmap_str} | {ae_str} | MAG:{MAG:.1f}x | BG:{'OK' if bg_frame is not None else '--'} | FIT:{'ON' if fit_state else 'OFF'}"
-        cv2.putText(display, hud, (15, 140), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3, cv2.LINE_AA)
+        cv2.putText(display, hud, (15, 140), cv2.FONT_HERSHEY_SIMPLEX, 1.2, hud_color, 3, cv2.LINE_AA)
 
         if overexposed:
             cv2.putText(display, "! OVEREXPOSED !", (15, 190),
@@ -347,7 +348,9 @@ def main():
         if fit_result is not None:
             draw_fit_overlay(display, *fit_result, cmap_on)
 
-        draw_loupe(display, mouse_state["x"], mouse_state["y"], raw, FrameHead.iHeight, FrameHead.iWidth, cmap_on)
+        lx = int(fit_result[0]) if fit_result else mouse_state["x"]
+        ly = int(fit_result[1]) if fit_result else mouse_state["y"]
+        draw_loupe(display, lx, ly, raw, FrameHead.iHeight, FrameHead.iWidth, cmap_on)
 
         cv2.imshow(win_name, display)
 
