@@ -246,6 +246,8 @@ def main():
     t_fps_update = t_last
     fps_display = 0
     ae_state = False
+    manual_exposure_us = 30 * 1000  # 默认 30ms
+    manual_gain = 0                 # 默认增益
     fit_state = False          # FIT 开关
     bg_frame = None            # 暗场背景
     fit_result = None          # 当前拟合结果 (x0, y0, wx, wy, amp, bg)
@@ -353,6 +355,9 @@ def main():
             elif btn_name == "AE":
                 ae_state = not ae_state
                 mvsdk.CameraSetAeState(hCamera, 1 if ae_state else 0)
+                if not ae_state:
+                    mvsdk.CameraSetExposureTime(hCamera, manual_exposure_us)
+                    mvsdk.CameraSetAnalogGain(hCamera, manual_gain)
                 print(f"🔆 自动曝光: {'ON' if ae_state else 'OFF'}")
             elif "BG" in btn_name:
                 bg_frame = frame.squeeze().astype(np.float32)
@@ -373,6 +378,9 @@ def main():
         elif key == ord('a'):
             ae_state = not ae_state
             mvsdk.CameraSetAeState(hCamera, 1 if ae_state else 0)
+            if not ae_state:
+                mvsdk.CameraSetExposureTime(hCamera, manual_exposure_us)
+                mvsdk.CameraSetAnalogGain(hCamera, manual_gain)
             print(f"🔆 自动曝光: {'ON' if ae_state else 'OFF'}")
         elif key == ord('b'):
             bg_frame = frame.squeeze().astype(np.float32)
