@@ -15,6 +15,10 @@ import mvsdk
 import platform
 import time
 from collections import deque
+from scipy.optimize import curve_fit
+
+MAG = 4          # 放大镜倍数
+LOUPE_SRC = 50   # 放大镜原始裁切尺寸
 
 class Button:
     def __init__(self, name, x, y, w, h, color=(60, 60, 60), hover_color=(120, 120, 120)):
@@ -65,45 +69,82 @@ class ButtonBar:
             btn.draw(img, hover=(i == self.hover_idx))
 
 
-mouse_state = {"clicked_btn": None}
+mouse_state = {"clicked_btn": None, "x": 0, "y": 0}
 
 def mouse_callback(event, x, y, flags, param):
+    mouse_state["x"], mouse_state["y"] = x, y
     if event == cv2.EVENT_LBUTTONDOWN:
         idx = param.check_hover(x, y)
         if idx >= 0:
             mouse_state["clicked_btn"] = idx
 
-def gaussian_2d_moments(img, roi_size=256):
+
+def _gauss_2d(XY, A, x0, sx, y0, sy, B):
+    """二维高斯: I(x,y) = A * exp(-((x-x0)^2/(2*sx^2) + (y-y0)^2/(2*sy^2))) + B"""
+    x, y = XY
+    return A * np.exp(-((x - x0) ** 2 / (2 * sx ** 2) + (y - y0) ** 2 / (2 * sy ** 2))) + B
+
+
+def gaussian_fit(img):
+    """scipy curve_fit 二维高斯拟合 (LM, 无边界约束, 约 6ms)。返回 (x0, y0, wx, wy) 或 None"""
     h, w = img.shape
     max_val = img.max()
     if max_val <= 0:
         return None
     cy, cx = np.unravel_index(np.argmax(img), img.shape)
 
-    half = roi_size // 2
+    # 矩方法粗估
+    half = 64
     x1, x2 = max(0, cx - half), min(w, cx + half)
     y1, y2 = max(0, cy - half), min(h, cy + half)
     roi = img[y1:y2, x1:x2].astype(np.float64)
-
     border = np.concatenate([roi[0, :], roi[-1, :], roi[:, 0], roi[:, -1]])
-    bg = np.median(border)
-    roi_sub = roi - bg
+    bg0 = np.median(border)
+    roi_sub = roi - bg0
     roi_sub[roi_sub < 0] = 0
-
     total = roi_sub.sum()
     if total <= 0:
         return None
-
     yy, xx = np.mgrid[0:roi_sub.shape[0], 0:roi_sub.shape[1]]
-    x0_loc = (xx * roi_sub).sum() / total
-    y0_loc = (yy * roi_sub).sum() / total
-    dx, dy = xx - x0_loc, yy - y0_loc
+    cx_loc = (xx * roi_sub).sum() / total
+    cy_loc = (yy * roi_sub).sum() / total
+    dx, dy = xx - cx_loc, yy - cy_loc
     var_x = (dx * dx * roi_sub).sum() / total
     var_y = (dy * dy * roi_sub).sum() / total
     if var_x <= 0 or var_y <= 0:
         return None
+    sx0, sy0 = np.sqrt(var_x), np.sqrt(var_y)
+    x0_m = x1 + cx_loc
+    y0_m = y1 + cy_loc
 
-    return x1 + x0_loc, y1 + y0_loc, 2.0 * np.sqrt(var_x), 2.0 * np.sqrt(var_y)
+    # 3.5 sigma ROI 切取
+    margin = int(max(sx0, sy0) * 3.5) + 1
+    x1 = max(0, int(x0_m) - margin)
+    x2 = min(w, int(x0_m) + margin)
+    y1 = max(0, int(y0_m) - margin)
+    y2 = min(h, int(y0_m) + margin)
+    roi = img[y1:y2, x1:x2].astype(np.float64)
+
+    valid = roi < 255
+    if valid.sum() < 50:
+        return None
+
+    A0 = max(roi.max() - bg0, 1.0)
+    yy, xx = np.mgrid[y1:y2, x1:x2]
+    xdata = np.vstack([xx[valid].ravel(), yy[valid].ravel()])
+    ydata = roi[valid].ravel()
+
+    try:
+        popt, _ = curve_fit(_gauss_2d, xdata, ydata,
+                            p0=[A0, x0_m, sx0, y0_m, sy0, bg0],
+                            method='lm', maxfev=300)
+    except Exception:
+        return None
+
+    _, x0, sx, y0, sy, _ = popt
+    if sx <= 0 or sy <= 0:
+        return None
+    return x0, y0, 2.0 * sx, 2.0 * sy
 
 
 def draw_fit_overlay(display, x0, y0, wx, wy):
@@ -126,6 +167,40 @@ def draw_fit_overlay(display, x0, y0, wx, wy):
     for i, line in enumerate(lines):
         cv2.putText(display, line, (15, 220 + i * 48),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3, cv2.LINE_AA)
+
+
+def draw_loupe(display, mouse_x, mouse_y, raw_frame, h, w):
+    """在右下角画放大镜"""
+    half = LOUPE_SRC // 2
+    x1 = max(0, mouse_x - half)
+    x2 = min(w, mouse_x + half)
+    y1 = max(0, mouse_y - half)
+    y2 = min(h, mouse_y + half)
+    crop = raw_frame[y1:y2, x1:x2]
+    if crop.size == 0:
+        return
+    zoomed = cv2.resize(crop, (LOUPE_SRC * MAG, LOUPE_SRC * MAG),
+                        interpolation=cv2.INTER_NEAREST)
+    zoomed_bgr = cv2.cvtColor(zoomed, cv2.COLOR_GRAY2BGR)
+
+    # 十字准星
+    ch = zoomed_bgr.shape[0] // 2
+    cv2.line(zoomed_bgr, (0, ch), (zoomed_bgr.shape[1], ch), (0, 0, 255), 1)
+    cv2.line(zoomed_bgr, (ch, 0), (ch, zoomed_bgr.shape[0]), (0, 0, 255), 1)
+
+    # 右下角放置
+    lh, lw = zoomed_bgr.shape[:2]
+    dx, dy = display.shape[1] - lw - 10, display.shape[0] - lh - 10
+    display[dy:dy + lh, dx:dx + lw] = zoomed_bgr
+    # 边框
+    cv2.rectangle(display, (dx - 1, dy - 1), (dx + lw, dy + lh), (0, 255, 255), 2)
+
+    # 像素值标签
+    px_val = raw_frame[min(mouse_y, h - 1), min(mouse_x, w - 1)]
+    label = f"[{mouse_x},{mouse_y}] = {px_val}"
+    cv2.putText(display, label, (dx, dy - 8),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2, cv2.LINE_AA)
+
 
 def main():
     DevList = mvsdk.CameraEnumerateDevice()
@@ -227,19 +302,20 @@ def main():
         else:
             display = frame
 
+        raw = frame.squeeze()
         if fit_state:
-            src = frame.squeeze().astype(np.float32)
+            src = raw.astype(np.float32)
             if bg_frame is not None:
                 src -= bg_frame
                 src[src < 0] = 0
-            fit_result = gaussian_2d_moments(src.astype(np.uint8))
+            fit_result = gaussian_fit(src.astype(np.uint8))
         else:
             fit_result = None
 
         btn_bar.draw(display)
 
         overexposed = np.any(frame >= 255)
-        ae_str = "AE: ON" if ae_state else f"Exp={manual_exposure_us // 1000}ms Gain={manual_gain}"
+        ae_str = "AE: ON" if ae_state else f"Exp={manual_exposure_us / 1000:.1f}ms Gain={manual_gain}"
         cmap_str = "JET" if cmap_on else "Gray"
         hud = f"FPS:{fps_display:.1f} | {FrameHead.iWidth}x{FrameHead.iHeight} | {cmap_str} | {ae_str} | BG:{'OK' if bg_frame is not None else '--'} | FIT:{'ON' if fit_state else 'OFF'}"
         cv2.putText(display, hud, (15, 140), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3, cv2.LINE_AA)
@@ -261,9 +337,10 @@ def main():
         if fit_result is not None:
             draw_fit_overlay(display, *fit_result)
 
+        draw_loupe(display, mouse_state["x"], mouse_state["y"], raw, FrameHead.iHeight, FrameHead.iWidth)
+
         cv2.imshow(win_name, display)
 
-        # 按钮点击
         clicked = mouse_state.get("clicked_btn")
         if clicked is not None:
             btn = btn_bar.buttons[clicked].name
@@ -273,12 +350,12 @@ def main():
                 break
             elif btn == "SAVE":
                 fname = f"capture_{time.strftime('%Y%m%d_%H%M%S')}.png"
-                cv2.imwrite(fname, frame.squeeze())
+                cv2.imwrite(fname, raw)
                 print(f"Saved: {fname}")
             elif btn == "AE":
                 toggle_ae()
             elif btn == "BG":
-                bg_frame = frame.squeeze().astype(np.float32)
+                bg_frame = raw.astype(np.float32)
                 print(f"BG captured (mean={bg_frame.mean():.1f})")
             elif btn == "FIT":
                 fit_state = not fit_state
@@ -288,34 +365,33 @@ def main():
                 print(f"Colormap: {'JET' if cmap_on else 'Gray'}")
             elif btn == "SET":
                 input_mode = "exposure"
-                input_buf = str(manual_exposure_us // 1000)
+                input_buf = f"{manual_exposure_us / 1000:.1f}"
 
-        # 键盘（仅 SET 输入模式）
         key = cv2.waitKey(1) & 0xFF
 
         if input_mode is not None:
-            if ord('0') <= key <= ord('9'):
+            if ord('0') <= key <= ord('9') or key == ord('.'):
                 input_buf += chr(key)
             elif key == 8:
                 input_buf = input_buf[:-1]
             elif key == 13:
                 try:
-                    val = int(input_buf) if input_buf else 0
+                    val = float(input_buf) if input_buf else 0.0
                 except ValueError:
-                    val = 0
+                    val = 0.0
                 if input_mode == "exposure":
-                    manual_exposure_us = max(1, val) * 1000
+                    manual_exposure_us = max(1, int(val * 1000))
                     if not ae_state:
                         mvsdk.CameraSetExposureTime(hCamera, manual_exposure_us)
                     input_mode = "gain"
                     input_buf = str(manual_gain)
                 else:
-                    manual_gain = max(0, min(300, val))
+                    manual_gain = max(0, min(300, int(val)))
                     if not ae_state:
                         mvsdk.CameraSetAnalogGain(hCamera, manual_gain)
                     input_mode = None
                     input_buf = ""
-                    print(f"Set: Exp={manual_exposure_us // 1000}ms Gain={manual_gain}")
+                    print(f"Set: Exp={manual_exposure_us / 1000:.1f}ms Gain={manual_gain}")
             elif key == 27:
                 input_mode = None
                 input_buf = ""
