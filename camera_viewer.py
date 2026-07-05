@@ -17,7 +17,7 @@ import time
 from collections import deque
 from scipy.optimize import curve_fit
 
-MAG = 4          # 放大镜倍数
+MAG = 3         # 放大镜倍数
 LOUPE_SRC = 50   # 放大镜原始裁切尺寸
 
 class Button:
@@ -146,7 +146,7 @@ def gaussian_fit(img):
     _, x0, sx, y0, sy, _ = popt
     if sx <= 0 or sy <= 0:
         return None
-    return x0, y0, 2.0 * sx, 2.0 * sy
+    return x0, y0, 4.0 * sx, 4.0 * sy
 
 
 def draw_fit_overlay(display, x0, y0, wx, wy):
