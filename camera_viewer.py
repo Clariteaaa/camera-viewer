@@ -181,6 +181,7 @@ def main():
     ae_state = False
     manual_exposure_us = 30_000
     manual_gain = 100
+    cmap_on = True          # 默认彩色映射
     fit_state = False
     bg_frame = None
     fit_result = None
@@ -192,7 +193,7 @@ def main():
     cv2.resizeWindow(win_name, 1280, 960)
 
     btn_bar = ButtonBar()
-    for name in ["QUIT", "SAVE", "AE", "BG", "FIT", "SET"]:
+    for name in ["QUIT", "SAVE", "AE", "BG", "FIT", "SET", "CMAP"]:
         btn_bar.add(name)
     cv2.setMouseCallback(win_name, mouse_callback, btn_bar)
 
@@ -234,7 +235,12 @@ def main():
             fps_display = 1.0 / (sum(fps_buf) / len(fps_buf))
             t_fps_update = now
 
-        display = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR) if mono else frame
+        if mono and cmap_on:
+            display = cv2.applyColorMap(frame.squeeze(), cv2.COLORMAP_JET)
+        elif mono:
+            display = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+        else:
+            display = frame
 
         # 拟合
         if fit_state:
@@ -251,7 +257,8 @@ def main():
         # HUD
         overexposed = np.any(frame >= 255)
         ae_str = "AE: ON" if ae_state else f"Exp={manual_exposure_us // 1000}ms Gain={manual_gain}"
-        hud = f"FPS:{fps_display:.1f} | {FrameHead.iWidth}x{FrameHead.iHeight} | {'Mono' if mono else 'Color'} | {ae_str} | BG:{'OK' if bg_frame is not None else '--'} | FIT:{'ON' if fit_state else 'OFF'}"
+        cmap_str = "JET" if cmap_on else "Gray"
+        hud = f"FPS:{fps_display:.1f} | {FrameHead.iWidth}x{FrameHead.iHeight} | {cmap_str} | {ae_str} | BG:{'OK' if bg_frame is not None else '--'} | FIT:{'ON' if fit_state else 'OFF'}"
         cv2.putText(display, hud, (15, 140), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3, cv2.LINE_AA)
 
         if overexposed:
@@ -293,6 +300,9 @@ def main():
             elif btn == "FIT":
                 fit_state = not fit_state
                 print(f"FIT: {'ON' if fit_state else 'OFF'}")
+            elif btn == "CMAP":
+                cmap_on = not cmap_on
+                print(f"Colormap: {'JET' if cmap_on else 'Gray'}")
             elif btn == "SET":
                 input_mode = "exposure"
                 input_buf = str(manual_exposure_us // 1000)
@@ -341,6 +351,9 @@ def main():
             elif key == ord('f'):
                 fit_state = not fit_state
                 print(f"FIT: {'ON' if fit_state else 'OFF'}")
+            elif key == ord('c'):
+                cmap_on = not cmap_on
+                print(f"Colormap: {'JET' if cmap_on else 'Gray'}")
 
     mvsdk.CameraUnInit(hCamera)
     mvsdk.CameraAlignFree(pFrameBuffer)
