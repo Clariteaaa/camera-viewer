@@ -1,0 +1,24 @@
+# MindVision SDK installation (download separately)
+MindVision/
+
+# SDK DLLs (copy from MindVision SDK after installation)
+bin/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Captured images
+capture_*.png
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+Desktop.ini
